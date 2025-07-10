@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Operation Guru - AI Chatbot (Valid & Gradient)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4.0.2/dist/tesseract.min.js"></script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6, #ec4899);
+      background-size: 400% 400%;
+      animation: gradientShift 15s ease infinite;
+      color: #1f2937;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    body.dark {
+      background: #1e293b;
+      color: #e0e7ff;
+    }
+
+    @keyframes gradientShift {
+      0% {
+        background-position: 0% 50%;
+      }
+
+      50% {
+        background-position: 100% 50%;
+      }
+
+      100% {
+        background-position: 0% 50%;
+      }
+    }
+
+    #chatbox {
+      background-color: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(4px);
+      overflow-y: auto;
+      scroll-behavior: smooth;
+      height: 60vh;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      border: 1px solid #d1d5db;
+      border-radius: 0.75rem;
+      position: relative;
+      transition: background-color 0.3s ease, color 0.3s ease;
+      color: #374151;
+    }
+
+    body.dark #chatbox {
+      background-color: rgba(30, 41, 59, 0.9);
+      border-color: #334155;
+      color: #e0e7ff;
+    }
+
+    #chatbox.dragover {
+      background-color: #e0e7ff;
+      border-color: #4f46e5;
+    }
+
+    body.dark #chatbox.dragover {
+      background-color: #4f46e5;
+      border-color: #c7dafe;
+    }
+
+    .chat-msg {
+      max-width: 75%;
+      padding: 1rem;
+      border-radius: 1rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      position: relative;
+      animation: fadeIn 0.3s ease-in-out;
+      font-size: 0.95rem;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      line-height: 1.4;
+    }
+
+    .chat-msg.user {
+      background-color: #ffffff;
+      color: #1e3a8a;
+      align-self: flex-end;
+      box-shadow: 0 4px 8px rgba(99, 102, 241, 0.3);
+    }
+
+    body.dark .chat-msg.user {
+      background-color: #4338ca;
+      color: #dbeafe;
+      box-shadow: 0 4px 8px rgba(139, 92, 246, 0.7);
+    }
+
+    .chat-msg.bot {
+      background-color: #f9fafb;
+      color: #374151;
+      align-self: flex-start;
+      font-style: italic;
+      box-shadow: 0 4px 8px rgba(156, 163, 175, 0.2);
+    }
+
+    body.dark .chat-msg.bot {
+      background-color: #334155;
+      color: #e0e7ff;
+      box-shadow: 0 4px 8px rgba(99, 102, 241, 0.7);
+    }
+
+    .chat-msg.thinking {
+      font-style: normal;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #6b7280;
+      font-weight: 500;
+    }
+
+    body.dark .chat-msg.thinking {
+      color: #c7d2fe;
+    }
+
+    .timestamp {
+      position: absolute;
+      bottom: 0.25rem;
+      right: 1rem;
+      font-size: 0.625rem;
+      color: #9ca3af;
+    }
+
+    body.dark .timestamp {
+      color: #a5b4fc;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .spinner {
+      border: 3px solid #c7dafe;
+      border-top-color: #4f46e5;
+      border-radius: 50%;
+      width: 16px;
+      height: 16px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    textarea {
+      overflow-y: hidden;
+      resize: none;
+      font-size: 1rem;
+      border-radius: 9999px;
+      border: 1px solid #c7dafe;
+      padding: 0.5rem 1rem;
+      transition: border-color 0.2s;
+      color: #1e3a8a;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #4338ca;
+      box-shadow: 0 0 8px #a78bfa;
+    }
+
+    body.dark textarea {
+      background-color: #1e293b;
+      border-color: #4f46e5;
+      color: #e0e7ff;
+    }
+
+    body.dark textarea:focus {
+      border-color: #a78bfa;
+      box-shadow: 0 0 8px #c4b5fd;
+    }
+
+    button.icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.25rem;
+      color: #4f46e5;
+      padding: 0.25rem 0.5rem;
+      transition: color 0.2s;
+      user-select: none;
+      border-radius: 0.375rem;
+    }
+
+    button.icon-btn:disabled {
+      color: #a5b4fc;
+      cursor: not-allowed;
+    }
+
+    button.icon-btn:hover:not(:disabled),
+    button.icon-btn:focus-visible {
+      color: #3730a3;
+      outline: none;
+      box-shadow: 0 0 0 2px #c7dafe;
+    }
+
+    #fileList {
+      margin-top: 0.5rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    #fileList .file-item {
+      background-color: #eef2ff;
+      border: 1px solid #c7dafe;
+      border-radius: 9999px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.875rem;
+      color: #3730a3;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    body.dark #fileList .file-item {
+      background-color: #4338ca;
+      border-color: #a78bfa;
+      color: #e0e7ff;
+    }
+
+    #fileList .file-item button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #7c3aed;
+      font-weight: bold;
+      font-size: 1rem;
+      line-height: 1;
+      padding: 0;
+      user-select: none;
+      border-radius: 50%;
+      width: 1.25rem;
+      height: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.2s;
+    }
+
+    #fileList .file-item button:hover,
+    #fileList .file-item button:focus-visible {
+      color: #4f46e5;
+      outline: none;
+      box-shadow: 0 0 0 2px #c7dafe;
+    }
+
+    #controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    #controls label {
+      cursor: pointer;
+      font-size: 1.5rem;
+      user-select: none;
+      color: #4f46e5;
+      transition: color 0.2s;
+      border-radius: 0.375rem;
+      padding: 0.1rem 0.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #controls label:hover,
+    #controls label:focus-visible {
+      color: #3730a3;
+      outline: none;
+      box-shadow: 0 0 0 2px #c7dafe;
+    }
+
+    #sendBtn {
+      background-color: #4338ca;
+      color: white;
+      border-radius: 9999px;
+      padding: 0.5rem 1.25rem;
+      font-weight: 600;
+      transition: background-color 0.2s;
+      user-select: none;
+    }
+
+    #sendBtn:disabled {
+      background-color: #a5b4fc;
+      cursor: not-allowed;
+    }
+
+    #sendBtn:hover:not(:disabled),
+    #sendBtn:focus-visible {
+      background-color: #6d28d9;
+      outline: none;
+      box-shadow: 0 0 0 2px #c7dafe;
+    }
+
+    #darkModeToggle {
+      position: fixed;
+      top: 1rem;
+      left: 1rem;
+      background-color: #4338ca;
+      color: white;
+      border: none;
+      border-radius: 9999px;
+      padding: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 2px 8px rgba(67, 56, 202, 0.7);
+      transition: background-color 0.2s;
+      z-index: 1000;
+    }
+
+    #darkModeToggle:hover,
+    #darkModeToggle:focus-visible {
+      background-color: #6d28d9;
+      outline: none;
+      box-shadow: 0 0 8px #a78bfa;
+    }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col p-4 max-w-4xl mx-auto">
+  <button id="darkModeToggle" aria-label="Toggle dark mode" title="Toggle dark mode">🌙</button>
+  <header
+    class="bg-white/10 backdrop-blur text-gray-900 dark:text-white p-4 text-xl font-bold flex justify-between items-center rounded-lg shadow-md">
+    <span>Operation Guru - AI Chatbot</span>
+    <select id="modelSelect"
+      class="text-sm rounded px-2 py-1 text-indigo-800 bg-white focus:outline-none focus:ring focus:ring-indigo-300"
+      aria-label="Select AI model">
+      <option value="guru-4" selected>Guru-4 (gpt-4)</option>
+      <option value="guru-3.5">Guru-3.5 (gpt-3.5-turbo)</option>
+    </select>
+  </header>
+
+  <main id="chat-container" class="flex-grow mt-4">
+    <section id="chatbox" role="log" aria-live="polite" aria-relevant="additions" tabindex="0"
+      aria-label="Chat messages">
+      <!-- Chat messages appended here -->
+    </section>
+  </main>
+
+  <div id="fileList" aria-live="polite" aria-atomic="true"></div>
+
+  <footer class="mt-4 flex gap-2 items-center">
+    <div id="controls">
+      <label for="fileInput" tabindex="0"
+        aria-label="Attach files (pdf, docx, txt, json, csv)">
+        📎
+      </label>
+      <input id="fileInput" type="file" class="hidden" multiple accept=".pdf,.docx,.txt,.json,.csv" aria-label="Attach files" />
+
+      <label for="ocrInput" tabindex="0"
+        aria-label="Upload image for OCR (jpg, png)">
+        📷
+      </label>
+      <input id="ocrInput" type="file" accept="image/*" class="hidden" aria-label="Upload image for OCR" />
+
+      <button id="clearBtn" aria-label="Clear chat history" class="icon-btn" title="Clear History">🧹</button>
+    </div>
+
+    <textarea id="userInput" rows="1" placeholder="Type your message..."
+      class="flex-grow border px-4 py-2 text-gray-900 focus:outline-none focus:ring focus:ring-indigo-300"
+      aria-label="Message input"></textarea>
+
+    <button id="sendBtn" aria-label="Send message"
+      class="transition disabled:cursor-not-allowed"
+      disabled>
+      Send
+    </button>
+  </footer>
+
+  <script>
+    const SYSTEM_PROMPT = `You are Operation Guru, an expert in insurance (motor, health, life, travel, home, fire, marine, commercial) with access to user-provided file contents. Do not say you can't read files. Answer accordingly.`;
+    let conversation = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+    if (!conversation.find(m => m.role === 'system')) conversation.unshift({ role: 'system', content: SYSTEM_PROMPT });
+    let files = [];
+    let isThinking = false;
+
+    const chatbox = document.getElementById('chatbox');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const fileInput = document.getElementById('fileInput');
+    const clearBtn = document.getElementById('clearBtn');
+    const modelSelect = document.getElementById('modelSelect');
+    const ocrInput = document.getElementById('ocrInput');
+    const fileList = document.getElementById('fileList');
+    const darkModeToggle = document.getElementById('darkModeToggle');
+
+    // Dark mode toggle
+    function updateDarkModeUI() {
+      if (localStorage.getItem('darkMode') === 'true') {
+        document.body.classList.add('dark');
+        darkModeToggle.textContent = '☀️';
+      } else {
+        document.body.classList.remove('dark');
+        darkModeToggle.textContent = '🌙';
+      }
+    }
+    darkModeToggle.addEventListener('click', () => {
+      if (localStorage.getItem('darkMode') === 'true') {
+        localStorage.setItem('darkMode', 'false');
+      } else {
+        localStorage.setItem('darkMode', 'true');
+      }
+      updateDarkModeUI();
+    });
+    updateDarkModeUI();
+
+    // Auto resize textarea
+    function autoResizeTextarea(el) {
+      el.style.height = 'auto';
+      el.style.height = (el.scrollHeight) + 'px';
+    }
+    userInput.addEventListener('input', () => {
+      autoResizeTextarea(userInput);
+      updateSendButtonState();
+    });
+
+    function updateSendButtonState() {
+      sendBtn.disabled = (userInput.value.trim() === '' && files.length === 0) || isThinking;
+    }
+
+    // Send on Enter (no shift)
+    userInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (!sendBtn.disabled) sendBtn.click();
+      }
+    });
+
+    // Attach files input
+    document.querySelector('label[for="fileInput"]').addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      addFiles(e.target.files);
+      e.target.value = '';
+    });
+
+    // OCR input handling
+    document.querySelector('label[for="ocrInput"]').addEventListener('click', () => {
+      ocrInput.click();
+    });
+    ocrInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      userInput.value += "\n\n[OCR processing image...]";
+      updateSendButtonState();
+      isThinking = true;
+      Tesseract.recognize(file, 'eng')
+        .then(({ data: { text } }) => {
+          userInput.value = userInput.value.replace("\n\n[OCR processing image...]", "");
+          userInput.value += `\n\n[OCR Extracted Text]:\n${text.trim()}`;
+          isThinking = false;
+          updateSendButtonState();
+          userInput.focus();
+          autoResizeTextarea(userInput);
+        })
+        .catch(() => {
+          userInput.value = userInput.value.replace("\n\n[OCR processing image...]", "");
+          alert("Failed to extract text from the image.");
+          isThinking = false;
+          updateSendButtonState();
+        });
+      e.target.value = ''; // reset to allow same file upload again
+    });
+
+    // Add files and avoid duplicates by name+size
+    function addFiles(selectedFiles) {
+      for (const f of selectedFiles) {
+        if (!files.find(file => file.name === f.name && file.size === f.size)) {
+          files.push(f);
+        }
+      }
+      renderFileList();
+      updateSendButtonState();
+    }
+
+    // Render file list with remove buttons
+    function renderFileList() {
+      fileList.innerHTML = '';
+      files.forEach((file, idx) => {
+        const div = document.createElement('div');
+        div.className = 'file-item';
+        div.textContent = file.name;
+        div.tabIndex = 0;
+        div.setAttribute('role', 'listitem');
+
+        const btn = document.createElement('button');
+        btn.setAttribute('aria-label', `Remove file ${file.name}`);
+        btn.innerHTML = '❌';
+        btn.addEventListener('click', () => {
+          files.splice(idx, 1);
+          renderFileList();
+          updateSendButtonState();
+          userInput.focus();
+        });
+        btn.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            btn.click();
+          }
+        });
+        div.appendChild(btn);
+        fileList.appendChild(div);
+      });
+      if (files.length > 0) {
+        fileList.setAttribute('role', 'list');
+      } else {
+        fileList.removeAttribute('role');
+      }
+    }
+
+    // Clear history button
+    clearBtn.addEventListener('click', () => {
+      if (confirm("Clear chat history? This action cannot be undone.")) {
+        localStorage.removeItem('chatHistory');
+        conversation = [{ role: 'system', content: SYSTEM_PROMPT }];
+        files = [];
+        renderMessages();
+        renderFileList();
+        userInput.value = '';
+        autoResizeTextarea(userInput);
+        updateSendButtonState();
+      }
+      userInput.focus();
+    });
+
+    // Drag & drop support on chatbox
+    chatbox.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      chatbox.classList.add('dragover');
+    });
+
+    chatbox.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      chatbox.classList.remove('dragover');
+    });
+
+    chatbox.addEventListener('drop', (e) => {
+      e.preventDefault();
+      chatbox.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        addFiles(e.dataTransfer.files);
+      }
+    });
+
+    // Render all messages in the chatbox
+    function renderMessages() {
+      chatbox.innerHTML = '';
+      conversation.filter(m => m.role !== 'system').forEach(msg => {
+        const div = document.createElement('div');
+        div.className = 'chat-msg ' + (msg.role === 'user' ? 'user' : 'bot');
+
+        // If thinking message, show spinner
+        if (msg.content === 'Operation Guru is thinking...') {
+          div.classList.add('thinking');
+          div.innerHTML = `<div class="spinner" aria-hidden="true"></div><div>${msg.content}</div><div class="timestamp">${new Date(msg.timestamp || Date.now()).toLocaleTimeString()}</div>`;
+        } else {
+          // Simple markdown-like bold and italic parsing
+          let content = msg.content
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/\n/g, '<br>');
+          div.innerHTML = `<div>${content}</div><div class="timestamp">${new Date(msg.timestamp || Date.now()).toLocaleTimeString()}</div>`;
+        }
+
+        chatbox.appendChild(div);
+      });
+      chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    // Save chat history to localStorage
+    function saveChat() {
+      localStorage.setItem('chatHistory', JSON.stringify(conversation));
+    }
+
+    // Send button click handler
+    sendBtn.addEventListener('click', async () => {
+      const text = userInput.value.trim();
+      if (!text && files.length === 0) return;
+
+      if (text === '/export pdf') return exportPDF();
+      if (text === '/export excel') return exportExcel();
+
+      isThinking = true;
+      updateSendButtonState();
+
+      const message = {
+        role: 'user',
+        content: files.length > 0 ? `Attached files:\n${files.map(f => f.name).join(', ')}\n\n${text}` : text,
+        timestamp: Date.now()
+      };
+
+      conversation.push(message);
+      saveChat();
+      renderMessages();
+      userInput.value = '';
+      autoResizeTextarea(userInput);
+      files = [];
+      renderFileList();
+
+      conversation.push({ role: 'assistant', content: 'Operation Guru is thinking...', timestamp: Date.now() });
+      renderMessages();
+
+      const model = modelSelect.value === 'guru-4' ? 'gpt-4o-mini' : 'gpt-3.5-turbo';
+      const OPENAI_API_KEY = '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';
+
+      try {
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENAI_API_KEY}`
+          },
+          body: JSON.stringify({
+            model,
+            messages: conversation.filter(m => m.content !== 'Operation Guru is thinking...'),
+            temperature: 0.2
+          })
+        });
+        const data = await res.json();
+        if (!data.choices || !data.choices[0] || !data.choices[0].message) throw new Error("Invalid API response");
+
+        const reply = data.choices[0].message.content;
+
+        conversation = conversation.filter(m => m.content !== 'Operation Guru is thinking...');
+
+        conversation.push({ role: 'assistant', content: reply, timestamp: Date.now() });
+        saveChat();
+        renderMessages();
+      } catch (err) {
+        conversation = conversation.filter(m => m.content !== 'Operation Guru is thinking...');
+        conversation.push({ role: 'assistant', content: 'Error: ' + err.message, timestamp: Date.now() });
+        renderMessages();
+      }
+      isThinking = false;
+      updateSendButtonState();
+      userInput.focus();
+    });
+
+    // Export chat to PDF
+    function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let y = 10;
+      conversation.forEach(m => {
+        if (m.role !== 'system') {
+          const role = m.role === 'user' ? 'You' : 'Guru';
+          const lines = doc.splitTextToSize(`${role}: ${m.content}`, 180);
+          doc.text(lines, 10, y);
+          y += lines.length * 7 + 5;
+        }
+      });
+      doc.save('chat.pdf');
+    }
+
+    // Export chat to Excel
+    function exportExcel() {
+      const data = conversation.filter(m => m.role !== 'system').map(m => ({ Role: m.role, Message: m.content }));
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Chat');
+      XLSX.writeFile(wb, 'chat.xlsx');
+    }
+
+    // Initial render and setup
+    renderMessages();
+    renderFileList();
+    autoResizeTextarea(userInput);
+    updateSendButtonState();
+  </script>
+</body>
+
+</html>
